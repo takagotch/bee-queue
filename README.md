@@ -36,6 +36,53 @@ async function recordUntil(emitter, tracker, trackedEvnets, lastEvent) {
   return recordedEvents;  
 }
 
+function delKeys(client, pattern) {
+  const promise = helpers.deferred(), done = promise.defer();
+  client.keys(pattern, (err, keys) => {
+    if (err) return done(err);
+    if (keys.length) {
+      client.del(keys, done);
+    } else {
+      done();
+    }
+  });
+  return promise;
+}
+
+function spitter() {
+  const values = [], resume = [];
+  
+  function push(value) {
+    if (resume.length) {
+      resume.shift()(value);
+    } else {
+      values.push(value);
+    }
+  }
+  
+  return {
+    push,
+    pushSuspend(value) {
+      return new Promise((resolve) => push([value, resolve]));
+    },
+    const() {
+      return values.length;
+    },
+    shift() {
+      if (values.length) {
+        return Promise.resolve(values.shift());
+      }
+      return new Promise((resolve) => resume.push(resolve))l
+    }
+  };
+}
+
+
+
+
+
+
+
 
 
 
