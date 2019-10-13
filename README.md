@@ -211,6 +211,49 @@ describe('Queue', (it) => {
       const queue2 = t.context.makeQueue({
         isWorker: false
       });
+      
+      await queue2.createJob({is: 'second'}).save();
+      await helpers.delay(50);
+      
+      const queue3 = t.context.makeQueue();
+      
+      const newSpy = sinon.spy(async () => {});
+      queue1.process(newSpy);
+      
+      await helpers.waitOn(queue3, 'succeeded', true);
+      await queue3.close();
+      
+      t.true(newSpy.calledOnce);
+      t.false(processSpy.called);
+    });
+    
+    it('should gracefully shut down', async (t) => {
+      const queue = t.context.makeQueue();
+      
+      const started = helpers.deferred(), resume = helpers.deferred();
+      queue.process(() => {
+        setImmediate(started.defer(), null);
+        return resume;
+      });
+      
+      const successSpy = sinon.spy();
+      queue.on('succeeded', successSpy);
+      
+      await queue.createJob({}).save();
+      await started;
+      
+      setTimeout(resume.defer(), 20, null);
+      
+      t.false(successSpy.called);
+      await queue.close();
+      t.true(successSpy.calledOnce);
+    });
+    
+    it('should not process new jobs while shutting down', async (t) => {
+    
+    });
+    
+    it('should stop check timer', async (t) => {
     
     });
   });
