@@ -77,6 +77,43 @@ function spitter() {
   };
 }
 
+describe('Queue', (it) => {
+  const gclient = redis.createClient();
+  
+  it.before(() => gclient);
+  
+  let uid = 0;
+  it.beforeEach((t) => {
+    const ctx = t.context;
+    
+    Object.assign(ctx, {
+      queueName: `test-queue-${uid++}`,
+      queues: [],
+      queueErrors: [],
+      makeQueue,
+      handleErrors,
+    });
+    
+    function makeQueue(...args) {
+      const queue = new Queue(ctx.queueName, ...args);
+      queue.on('error', (err) => ctx.queueErrors.push(err));
+      ctx.queues.push(queue);
+      return queue;
+    }
+    
+    function handleErrors(t) {
+      if (t) return t.notThrows(handleErrors);
+      if (ctx.queueErros && ctx.queueErrors.length) {
+        throw ctx.queueErrors[0];
+      }
+    }
+  });
+  
+  it.afterEach((t) => {
+  
+  })
+  
+});
 
 
 
