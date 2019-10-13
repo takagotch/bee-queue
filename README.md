@@ -110,9 +110,110 @@ describe('Queue', (it) => {
   });
   
   it.afterEach((t) => {
+    const errs = t.context.queueErrors;
+    if (errs && errs.length) {
+      t.fail('errors were not cleared up');
+    }
+    
+    if (t.context.queues) {
+      return Promise.all(t.context.queues.map((queue) => {
+        if (!quwue.paused) {
+          return queue.close();
+        }
+      }));
+    }
+  });
   
-  })
+  it.beforeEach(async (t) => delKeys(await gclient, `bq:$(t.context.queueName):*`));
+  it.afterEach(async (t) => delKeys(await gclient, `bq:$(t.context.queueName):*`));
   
+  it('should initialize without ensuring scripts', async (t) => {
+    const queue = t.context.makeQueue({
+      ensureScript: false
+    });
+    
+    await queue.ready();
+    
+    t.context.handleErrors(t);
+  });
+  
+  it.cb('should support a ready callback', (t) => {
+    const queue = t.context.makeQueue();
+    queue.ready(t.end);
+  });
+  
+  it('should indicate whether it is running', async (t) => {
+    const queue = t.context.makeQueue();
+    
+    t.true(queue.isRunning());
+    await queue.ready();
+    t.true(queue.isRunning());
+    await queue.close();
+    t.false(queue.isRunning());
+  });
+  
+  it.describe('Connection', (it) => {
+    it.describe('Close', (it) => {
+      const queue = t.context.makeQueue();
+      
+      await queue.ready();
+      
+      t.true(redis.isReady(queue.client));
+      t.true(redis.isReady(queue.bclient));
+      t.true(redis.isReady(queue.eclient));
+      
+      await queue.close();
+      
+      await Promise.all([
+        redis.isReady(queue.client) && helpers.waitOn(queue.client, 'close'),
+        redis.isReady(queue.bclient) && helpers.waitOn(queue.bclient, 'close'),
+        redis.isReady(queue.eclient) && helpers.waitOn(queue.eclient, 'close'),
+      ]);
+      
+      t.false(redis.isReady(queue.client));
+      t.false(redis.isReady(queue.eclient));
+    });
+    
+    it.cb('should support callbacks', (t) => {
+      const queue = t.context.makeQueue();
+      
+      queue.ready().then(() => {
+        queue.close(t.end);
+      }).catch(t.end);
+    });
+    
+    it('should not fail after a second call', async (t) => {
+      const queue = t.context.makeQueue();
+      
+      await queue.ready();
+      
+      await queue.close();
+      await t.notThrows(queue.close());
+    });
+    
+    it('should stop processing even with a redis strategy', async (t) => {
+      const queue = t.context.makeQueue({
+        redis: {
+          retryStrategy: () => 1
+        }
+      });
+      
+      const processSpy = sinon.spy(async () => {});
+      queue.process(processSpy);
+      
+      await queue.createJob({is: 'first'}).save();
+      await helpers.waitOn(queue, 'succeeded', true);
+      t.true(processSpy.calledOnce);
+      processSpy.reset();
+      
+      queue.close();
+      
+      const queue2 = t.context.makeQueue({
+        isWorker: false
+      });
+    
+    });
+  });
 });
 
 
