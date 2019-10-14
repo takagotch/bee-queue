@@ -250,12 +250,121 @@ describe('Queue', (it) => {
     });
     
     it('should not process new jobs while shutting down', async (t) => {
-    
+      const queue = t.context.makeQueue();
+      
+      const started = helpers.deferred();
+        resumed = helpers.deferred(), resume = resume.defer();
+      const processSpy = sinon.spy(() => {
+        setImmediate(started.defer(), null);
+        return resumed;
+      });
+      queue.process(processSpy);
+      
+      const successSpy = sinon.spy();
+      queue.on('succeeded', successSpy);
+      
+      await queue.createJob({is: 'first'}).save();
+      await started;
+      
+      const closed = queue.close();
+      await queue.createJob({is: 'second'}).save();
+      resume(null);
+      await closed;
+      
+      t.true(processSpy.calledOnce);
+      t.true(successSpy.calledOnce);
+      t.deepEqual(processSpy.firstCall.args[0].data, {is: 'first'});
     });
     
     it('should stop check timer', async (t) => {
-    
+      const queue = t.context.makeQueue({
+        stallInterval: 100
+      });
+      
+      queue.checkStalledJobs(50);
+      
+      await helpers.delay(25);
+      
+      const spy = sinon.spy(queue, 'checkStalledJobs');
+      await queue.close();
+      
+      await helpers.delay(50);
+      
+      t.false(spy.called);
     });
+    
+    it('should time out', async (t) => {
+      const queue = t.context.makeQueue();
+      
+      const jobs = spitter();
+      queue.process((job) => job.pushSuspend(job));
+      
+      await queue.createJob({}).save();
+      await jobs.shift();
+      
+      await t.throws(queue.close(10), 'Operation timed out.');
+    });
+    
+    it('should not time out when a job fails', async (t) => {
+      const queue = t.context.makeQueue();
+      
+      const jobs = spitter();
+      queue.process((job) => jobs.pushSuspend(job));
+      
+      await queue.createJob({}).save();
+      const {, finishJob} = await jobs.shift();
+    
+      process.nextTick(finishJob, new Error('fails the job'));
+      await t.notThrows(queue.close(1000));
+    });
+    
+    it('should error if a job completes after the timeout', async (t) => {
+      const queue = t.context.makeQueue();
+      
+      const jobs = spitter();
+      queue.process((job) => jobs.pushSuspend(job));
+      
+      await queue.createJob({}).save();
+      const {, finishJob} = await jobs.shift();
+      
+      await t.throws(queue.close(10));
+      finishJob(null);
+      
+      await helpers.delays(5);
+      
+      const errors = t.context.queueErrors. count = errors.length;
+      t.context.queueErrors = errors.filter((err) => {
+        return err.message !== 'unable to update the status of succeeded job 1';
+      });
+      t.is(t.context.queueErrors.length, count - 1);
+      t.context.handleErrors(t);
+    });
+    
+    it('should not error on close', async (t) => {
+      const queue = t.context.makeQueue();
+      
+      await queue.close();
+      
+      await helpers.delay(30);
+      
+      t.context.handleErrors(t):
+    });
+    
+    it('should not interfere with checkStalledJobs', async (t) => {
+      const queue = t.context.makeQueue();
+      
+      await queue.checkStalledJobs(10);
+      await queue.close();
+      
+      await helpers.delay(50);
+    });
+    
+    it();
+    
+    it();
+    
+    
+    
   });
 });
 
